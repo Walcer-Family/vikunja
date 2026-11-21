@@ -35,8 +35,8 @@
     "addToHomeScreen": "Add this app to your home screen for faster access and improved experience.",
     "goToOverview": "Go to overview",
     "project": {
-      "importText": "Import your projects and tasks from other services into Vikunja:",
-      "import": "Import your data into Vikunja"
+      "importText": "Import your projects and tasks from other services into Tasks:",
+      "import": "Import your data into Tasks"
     }
   },
   "demo": {
@@ -49,7 +49,7 @@
     "text": "The page you requested does not exist."
   },
   "ready": {
-    "loading": "Vikunja is loading…",
+    "loading": "Tasks is loading…",
     "errorOccured": "An error occurred:",
     "checkApiUrl": "Please check if the api url is correct.",
     "rateLimited": "The server received too many requests. Please wait a moment and reload the page.",
@@ -885,7 +885,7 @@
     "imprint": "Imprint",
     "privacy": "Privacy Policy",
     "closeSidebar": "Close sidebar",
-    "home": "Vikunja home",
+    "home": "Tasks home",
     "toggleChildProjects": "Toggle sub-projects",
     "main": "Main navigation",
     "savedFilters": "Saved filters"
@@ -1521,7 +1521,7 @@
     "url": "Vikunja URL",
     "urlPlaceholder": "eg. https://localhost:3456",
     "change": "change",
-    "use": "Using Vikunja installation at {0}",
+    "use": "Connected to {0}",
     "error": "Could not find or use Vikunja installation at \"{domain}\". Please check if the url has the correct format and you can reach it when accessing it directly and try again.",
     "success": "Using Vikunja installation at \"{domain}\".",
     "urlRequired": "A url is required."
