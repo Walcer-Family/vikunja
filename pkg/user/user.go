@@ -227,7 +227,7 @@ func (u *User) GetName() string {
 func (u *User) GetNameAndFromEmail() string {
 	// Use RFC 5322 compliant address formatting to properly handle special characters like @ in names
 	addr := mail.Address{
-		Name:    u.GetName() + " via Vikunja",
+		Name:    u.GetName() + " via Walcer Tasks",
 		Address: config.MailerFromEmail.GetString(),
 	}
 	return addr.String()
