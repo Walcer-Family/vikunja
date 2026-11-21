@@ -1,14 +1,18 @@
 // Regenerates every Walcer brand asset at the same filename and pixel size
 // as the upstream Vikunja asset it replaces. Run from this folder:
 //   node gen.mjs [font.ttf]   (default: fonts/PlayfairDisplay.ttf)
-// Needs python3 + fonttools (for wordmark.py) and Playwright's Chromium.
+// Needs python3 + fonttools (for wordmark.py) and Playwright's Chromium
+// (or CHROME=/path/to/chrome to use an installed browser).
 import { execFileSync } from 'node:child_process'
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const { chromium } = require('playwright')
 
-const FONT = process.argv[2] || 'fonts/PlayfairDisplay.ttf'  // serif W + wordmark (OFL)
+const FONT = process.argv[2] || 'fonts/PlayfairDisplay.ttf'  // serif W monogram (OFL)
+// Wordmark uses Vikunja's own masthead face (Quicksand, bundled in frontend/src/assets/fonts),
+// sized so its cap height is ~42% of the tile, like the original "Vikunja" wordmark.
+const WORDMARK_CAP = 0.42
 const BLUE = '#1973ff'      // Vikunja's primary colour, unchanged
 const INK = '#2c3844'       // upstream wordmark text colour (email)
 const NAME = 'Tasks'
@@ -30,7 +34,7 @@ const tile = (x, y, s, { r = 22, inset = 0, bg = BLUE } = {}) => {
 const svg = (w, h, body, extra = '') =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"${extra}>${body}</svg>`
 
-const wm = JSON.parse(execFileSync('python3', ['wordmark.py', NAME, '700', FONT]).toString())
+const wm = JSON.parse(execFileSync('python3', ['wordmark.py', NAME, '700']).toString())
 // wordmark(x, yTop, capPx, fill) -> path scaled so cap height = capPx
 const wordmark = (x, y, cap, fill) => {
   const k = cap / wm.cap
@@ -40,7 +44,8 @@ const wordmark = (x, y, cap, fill) => {
 // ---------- vector assets (same viewBox as upstream) ----------
 const out = {}
 { // header/login logo 872.6 x 256.8, text follows --logo-text-color via currentColor
-  const t = wordmark(292, 128.4 - 70, 140, 'currentColor')
+  const cap = 256 * WORDMARK_CAP
+  const t = wordmark(292, 128.4 - cap / 2, cap, 'currentColor')
   const full = svg(872.6, 256.8, `<title>${NAME}</title>${tile(0, 0.4, 256)}${t.el}`, ' role="img"')
   out[`${FE}/src/assets/logo-full.svg`] = full
   out[`${FE}/src/assets/logo-full-pride.svg`] = full.replace('viewBox="0 0 872.6 256.8"', 'viewBox="0 0 872.6 256.8"')
@@ -73,7 +78,8 @@ raster.push([`${icons}/favicon-tracking-32x32.png`, 32, 32, svg(32, 32, tile(0, 
 raster.push([`${icons}/badge-monochrome.png`, 128, 128, svg(128, 128, `<g transform="scale(1.28)">${mono('#fff')}</g>`)])
 raster.push(['/tmp/walcer-favicon-256.png', 256, 256, rounded(256)])
 { // email header 250 x 75
-  const t = wordmark(88, 37.5 - 17.5, 35, INK)
+  const cap = 75 * WORDMARK_CAP
+  const t = wordmark(88, 37.5 - cap / 2, cap, INK)
   raster.push(['../pkg/notifications/logo.png', 250, 75, svg(250, 75, tile(0, 0, 75) + t.el)])
 }
 // backgrounds (JPEG): loading screen + login side image
@@ -83,10 +89,10 @@ const bg = (w, h, wm) => svg(w, h,
 raster.push([`${FE}/src/assets/llama-nightscape.jpg`, 1920, 1920, bg(1920, 1920, { x: 360, y: 360, s: 1200 }), 'jpeg'])
 raster.push([`${FE}/src/assets/no-auth-image.jpg`, 900, 1184, bg(900, 1184, { x: 100, y: 240, s: 700 }), 'jpeg'])
 
-const browser = await chromium.launch()
+const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {})
 const page = await browser.newPage()
 for (const [p, w, h, s, fmt = 'png'] of raster) {
-  await page.setViewportSize({ width: w, height: h })
+  await page.setViewportSize({ width: Math.max(w, 200), height: Math.max(h, 200) })  // tiny viewports hang Chrome; clip below
   await page.setContent(`<html><body style="margin:0;background:transparent">${s}</body></html>`)
   await page.screenshot({ path: p, type: fmt, omitBackground: fmt === 'png', quality: fmt === 'jpeg' ? 88 : undefined, clip: { x: 0, y: 0, width: w, height: h } })
 }
