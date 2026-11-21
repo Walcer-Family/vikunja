@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"code.vikunja.io/api/pkg/config"
+	"code.vikunja.io/api/pkg/i18n"
 	"code.vikunja.io/api/pkg/initialize"
 	"code.vikunja.io/api/pkg/log"
 	"code.vikunja.io/api/pkg/mail"
@@ -37,6 +38,8 @@ var testmailCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	PreRun: func(_ *cobra.Command, _ []string) {
 		initialize.LightInit()
+		// LightInit skips translations; the mail footer needs them.
+		i18n.Init()
 
 		// Start the mail daemon
 		mail.StartMailDaemon()
