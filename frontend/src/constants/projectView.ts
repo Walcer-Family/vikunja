@@ -7,6 +7,8 @@ export const PROJECT_VIEW_KINDS = {
 	GANTT: 'gantt',
 	TABLE: 'table',
 	KANBAN: 'kanban',
+	GRAPH: 'graph',
+	TREE: 'tree',
 } as const satisfies Record<string, ProjectViewKind>
 
 export const DEFAULT_PROJECT_VIEW_SETTINGS = {

@@ -236,6 +236,12 @@ function handleBubbleSave(event: FocusEvent) {
 						<option value="kanban">
 							{{ $t('project.kanban.title') }}
 						</option>
+						<option value="graph">
+							{{ $t('project.graph.title') }}
+						</option>
+						<option value="tree">
+							{{ $t('project.tree.title') }}
+						</option>
 					</select>
 				</div>
 			</template>

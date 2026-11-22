@@ -1903,9 +1903,9 @@ export type ProjectView = {
      */
     readonly updated?: string;
     /**
-     * The kind of this view. One of list, gantt, table or kanban.
+     * The kind of this view. One of list, gantt, table, kanban, graph or tree.
      */
-    view_kind?: 'list' | 'gantt' | 'table' | 'kanban';
+    view_kind?: 'list' | 'gantt' | 'table' | 'kanban' | 'graph' | 'tree';
 };
 
 export type ProjectViewBucketConfiguration = {
@@ -1973,9 +1973,9 @@ export type ProjectViewReadBody = {
      */
     readonly updated?: string;
     /**
-     * The kind of this view. One of list, gantt, table or kanban.
+     * The kind of this view. One of list, gantt, table, kanban, graph or tree.
      */
-    view_kind?: 'list' | 'gantt' | 'table' | 'kanban';
+    view_kind?: 'list' | 'gantt' | 'table' | 'kanban' | 'graph' | 'tree';
 };
 
 export type Provider = {
@@ -4939,9 +4939,9 @@ export type ProjectViewWritable = {
      */
     title?: string;
     /**
-     * The kind of this view. One of list, gantt, table or kanban.
+     * The kind of this view. One of list, gantt, table, kanban, graph or tree.
      */
-    view_kind?: 'list' | 'gantt' | 'table' | 'kanban';
+    view_kind?: 'list' | 'gantt' | 'table' | 'kanban' | 'graph' | 'tree';
 };
 
 export type ProjectViewReadBodyWritable = {
@@ -4974,9 +4974,9 @@ export type ProjectViewReadBodyWritable = {
      */
     title?: string;
     /**
-     * The kind of this view. One of list, gantt, table or kanban.
+     * The kind of this view. One of list, gantt, table, kanban, graph or tree.
      */
-    view_kind?: 'list' | 'gantt' | 'table' | 'kanban';
+    view_kind?: 'list' | 'gantt' | 'table' | 'kanban' | 'graph' | 'tree';
 };
 
 export type PublicInviteLinkWritable = {

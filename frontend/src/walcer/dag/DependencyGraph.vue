@@ -8,11 +8,14 @@
 <template>
 	<div class="dag-page">
 		<header class="dag-toolbar">
-			<label class="dag-field">
+			<label
+				v-if="!fixedProjectId"
+				class="dag-field"
+			>
 				<span>Project</span>
 				<select
 					id="dag-project"
-					v-model.number="projectId"
+					v-model.number="pickedProjectId"
 				>
 					<option :value="0">All projects</option>
 					<option
@@ -142,9 +145,13 @@ import {useQuery} from '@tanstack/vue-query'
 import Loading from '@/components/misc/Loading.vue'
 import {allTasksQuery} from '@/client/queries/tasks'
 import {useProjects} from '@/composables/useProjects'
-import {useTitle} from '@/composables/useTitle'
 import {useAuthStore} from '@/stores/auth'
 import {buildGraph, layoutGraph, type EdgeKind, type GraphEdge, type LayoutNode, type RawTask} from './graph'
+
+const props = defineProps<{
+	/** set when embedded as a project's Graph view; hides the project picker */
+	fixedProjectId?: number
+}>()
 
 const NODE_W = 240
 const NODE_H = 56
@@ -152,13 +159,12 @@ const GAP_X = 70
 const GAP_Y = 18
 const PAD = 16
 
-useTitle('Dependencies')
-
 const router = useRouter()
 const auth = useAuthStore()
 const projectState = useProjects()
 
-const projectId = ref(0)
+const pickedProjectId = ref(0)
+const projectId = computed(() => props.fixedProjectId ?? pickedProjectId.value)
 const showDone = ref(true)
 const showSubtasks = ref(false)
 const showIsolated = ref(false)
@@ -227,7 +233,7 @@ const clip = (s: string, n: number) => s.length > n ? s.slice(0, n - 1) + '…' 
 function meta(n: LayoutNode) {
 	const parts: string[] = []
 	parts.push(n.identifier || `#${n.id}`)
-	if (n.external || projectId.value === 0) {
+	if (n.external || projectId.value === 0) { // name the project when it isn't obvious
 		const p = projectState.projects[n.projectId]
 		if (p) parts.push(clip(p.title, 14))
 	}

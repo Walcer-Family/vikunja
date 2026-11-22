@@ -472,7 +472,7 @@ const router = createRouter({
 		{
 			path: '/dependencies',
 			name: 'walcer.dependencies',
-			component: () => import('@/walcer/dag/DependencyGraph.vue'),
+			component: () => import('@/walcer/dag/DependenciesPage.vue'),
 		},
 		{
 			path: '/trash',
