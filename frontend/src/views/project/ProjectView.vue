@@ -14,6 +14,8 @@ import ProjectList from '@/components/project/views/ProjectList.vue'
 import ProjectGantt from '@/components/project/views/ProjectGantt.vue'
 import ProjectTable from '@/components/project/views/ProjectTable.vue'
 import ProjectKanban from '@/components/project/views/ProjectKanban.vue'
+import ProjectGraph from '@/components/project/views/ProjectGraph.vue'
+import ProjectTree from '@/components/project/views/ProjectTree.vue'
 import ProjectInTrashNotice from '@/components/project/ProjectInTrashNotice.vue'
 
 import {saveProjectToHistory} from '@/modules/projectHistory'
@@ -124,6 +126,18 @@ watchEffect(() => baseStore.setCurrentProjectViewId(props.viewId))
 	/>
 	<ProjectKanban
 		v-if="currentView?.view_kind === 'kanban'"
+		:project-id="projectId"
+		:is-loading-project="isLoadingProject"
+		:view-id
+	/>
+	<ProjectGraph
+		v-if="currentView?.view_kind === 'graph'"
+		:project-id="projectId"
+		:is-loading-project="isLoadingProject"
+		:view-id
+	/>
+	<ProjectTree
+		v-if="currentView?.view_kind === 'tree'"
 		:project-id="projectId"
 		:is-loading-project="isLoadingProject"
 		:view-id

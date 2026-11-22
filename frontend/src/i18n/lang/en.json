@@ -608,6 +608,12 @@
       "columns": "Columns",
       "sortBy": "Sort by {column}"
     },
+    "graph": {
+      "title": "Graph"
+    },
+    "tree": {
+      "title": "Tree"
+    },
     "kanban": {
       "title": "Kanban",
       "limit": "Limit: {limit}",
