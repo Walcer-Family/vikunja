@@ -82,6 +82,15 @@
 						{{ $t('timeTracking.title') }}
 					</RouterLink>
 				</li>
+				<!-- Walcer: dependency graph -->
+				<li>
+					<RouterLink :to="{ name: 'walcer.dependencies'}">
+						<span class="menu-item-icon icon">
+							<Icon icon="sitemap" />
+						</span>
+						Dependencies
+					</RouterLink>
+				</li>
 				<li>
 					<RouterLink :to="{ name: 'trash'}">
 						<span class="menu-item-icon icon">
