@@ -1905,5 +1905,36 @@
     "projectInTrash": "This project is in the trash. It was deleted {since}.",
     "projectInTrashBy": "This project is in the trash. {user} deleted it {since}.",
     "projectInTrashByYou": "This project is in the trash. You deleted it {since}."
+  },
+  "walcer": {
+    "dependencies": {
+      "title": "Dependencies",
+      "description": "How tasks depend on each other across all projects. Arrows point from a task to the tasks waiting on it.",
+      "display": "Display",
+      "colorBy": "Color by",
+      "colorByOptions": {
+        "status": "Status",
+        "project": "Project",
+        "person": "Person",
+        "label": "Label"
+      },
+      "showSubtasks": "Show subtasks",
+      "showUnlinked": "Show tasks without links",
+      "empty": "No linked tasks here yet. Open a task and add a relation such as \"blocking\" or \"precedes\"; it will show up here as an arrow.",
+      "legend": {
+        "ready": "Ready",
+        "waiting": "Waiting on other tasks",
+        "done": "Done",
+        "overdue": "Overdue",
+        "unassigned": "Unassigned",
+        "noLabel": "No label",
+        "otherProject": "Other project"
+      },
+      "tooltip": {
+        "ready": "Ready to work on",
+        "waiting": "Waiting on {count} open task | Waiting on {count} open tasks",
+        "external": "In another project"
+      }
+    }
   }
 }
