@@ -1,217 +1,138 @@
 <!--
-	Walcer: "Dependencies" page — every task relation (blocks, precedes, and
-	optionally subtasks) drawn as a left-to-right DAG. Uses only the existing
-	task list API; lives in frontend/src/walcer so upstream files stay untouched
-	apart from one route and one sidebar link. Strings are English on purpose
-	(no en.json edits, which would conflict on every upstream rebase).
+	Walcer: task dependency graph (DAG). Presentational: the containers
+	(ProjectGraph.vue for one project, DependenciesPage.vue for everything)
+	fetch tasks through the regular task list API and Vikunja's own filters,
+	and pass them in. Blocking / precedes (and optionally subtask) relations
+	become left-to-right arrows; layout lives in ./graph.ts.
 -->
 <template>
-	<div class="dag-page">
-		<header class="dag-toolbar">
-			<label
-				v-if="!fixedProjectId"
-				class="dag-field"
-			>
-				<span>Project</span>
-				<select
-					id="dag-project"
-					v-model.number="pickedProjectId"
-				>
-					<option :value="0">All projects</option>
-					<option
-						v-for="p in projectOptions"
-						:key="p.id"
-						:value="p.id"
-					>
-						{{ p.title }}
-					</option>
-				</select>
-			</label>
-			<label class="dag-field">
-				<span>Person</span>
-				<select
-					id="dag-person"
-					v-model.number="personId"
-				>
-					<option :value="0">Everyone</option>
-					<option :value="-1">Unassigned</option>
-					<option
-						v-for="u in people"
-						:key="u.id"
-						:value="u.id"
-					>
-						{{ u.name }}
-					</option>
-				</select>
-			</label>
-			<label
-				v-if="labelOptions.length"
-				class="dag-field"
-			>
-				<span>Label</span>
-				<select
-					id="dag-label"
-					v-model.number="labelId"
-				>
-					<option :value="0">Any label</option>
-					<option
-						v-for="l in labelOptions"
-						:key="l.id"
-						:value="l.id"
-					>
-						{{ l.title }}
-					</option>
-				</select>
-			</label>
-			<label class="dag-field">
-				<span>Color by</span>
-				<select
-					id="dag-color"
-					v-model="colorBy"
-				>
-					<option value="status">Status</option>
-					<option value="project">Project</option>
-					<option value="person">Person</option>
-					<option value="label">Label</option>
-				</select>
-			</label>
-			<label class="dag-check"><input
-				id="dag-done"
-				v-model="showDone"
-				type="checkbox"
-			> Completed tasks</label>
-			<label class="dag-check"><input
-				id="dag-subtasks"
-				v-model="showSubtasks"
-				type="checkbox"
-			> Subtasks</label>
-			<label class="dag-check"><input
-				id="dag-isolated"
-				v-model="showIsolated"
-				type="checkbox"
-			> Tasks without links</label>
-			<span class="dag-legend">
-				<template v-if="colorBy === 'status'">
-					<i class="sw ready" /> Ready
-					<i class="sw waiting" /> Waiting on others
-					<i class="sw done" /> Done
+	<div
+		class="loader-container dependency-graph"
+		:class="{'is-loading': loading}"
+	>
+		<Card
+			:padding="false"
+			:has-content="false"
+		>
+			<div class="dag-legend">
+				<template v-if="settings.colorBy === 'status'">
+					<span><i class="swatch is-ready" />{{ $t('walcer.dependencies.legend.ready') }}</span>
+					<span><i class="swatch is-waiting" />{{ $t('walcer.dependencies.legend.waiting') }}</span>
+					<span><i class="swatch is-done" />{{ $t('walcer.dependencies.legend.done') }}</span>
 				</template>
-				<template
-					v-for="item in legend"
-					v-else
-					:key="item.name"
-				>
-					<i
-						class="sw"
+				<template v-else>
+					<span
+						v-for="item in legend"
+						:key="item.key"
+					><i
+						class="swatch"
 						:style="{background: item.color}"
-					/> {{ item.name }}
+					/>{{ item.name }}</span>
 				</template>
-				<i class="sw overdue" /> Overdue
-			</span>
-		</header>
+				<span><i class="swatch is-overdue" />{{ $t('walcer.dependencies.legend.overdue') }}</span>
+			</div>
 
-		<Loading v-if="query.isLoading.value" />
-		<p
-			v-else-if="layout.nodes.length === 0"
-			class="dag-empty"
-		>
-			No linked tasks here yet. Open a task, choose <b>Relations</b>, and add
-			"blocking" or "precedes" links; they will show up as arrows on this page.
-		</p>
-		<div
-			v-else
-			class="dag-scroll"
-		>
-			<svg
-				:width="layout.width + PAD * 2"
-				:height="layout.height + PAD * 2"
-				:viewBox="`${-PAD} ${-PAD} ${layout.width + PAD * 2} ${layout.height + PAD * 2}`"
-				role="img"
-				aria-label="Task dependency graph"
+			<p
+				v-if="!loading && layout.nodes.length === 0"
+				class="has-text-centered has-text-grey is-italic dag-empty"
 			>
-				<defs>
-					<marker
-						id="dag-arrow"
-						viewBox="0 0 10 10"
-						refX="9"
-						refY="5"
-						markerWidth="7"
-						markerHeight="7"
-						orient="auto-start-reverse"
-					>
-						<path
-							d="M0 0L10 5L0 10z"
-							class="dag-arrowhead"
-						/>
-					</marker>
-				</defs>
-				<path
-					v-for="(e, i) in layout.edges"
-					:key="`e${i}`"
-					:d="edgePath(e)"
-					class="dag-edge"
-					:class="[e.kind, {cyclic: e.cyclic, hl: isHighlighted(e)}]"
-					marker-end="url(#dag-arrow)"
-				/>
-				<g
-					v-for="n in layout.nodes"
-					:key="n.id"
-					class="dag-node"
-					:class="[n.state, {overdue: n.overdue, external: n.external, dim: hovered !== null && !related.has(n.id)}]"
-					:transform="`translate(${n.x} ${n.y})`"
-					tabindex="0"
-					role="link"
-					@click="open(n.id)"
-					@keydown.enter="open(n.id)"
-					@mouseenter="hovered = n.id"
-					@mouseleave="hovered = null"
-					@focus="hovered = n.id"
-					@blur="hovered = null"
+				{{ $t('walcer.dependencies.empty') }}
+			</p>
+			<div
+				v-else
+				class="dag-canvas"
+			>
+				<svg
+					:width="layout.width + PAD * 2"
+					:height="layout.height + PAD * 2"
+					:viewBox="`${-PAD} ${-PAD} ${layout.width + PAD * 2} ${layout.height + PAD * 2}`"
+					role="img"
+					:aria-label="$t('walcer.dependencies.title')"
 				>
-					<title>{{ tooltip(n) }}</title>
-					<rect
-						:width="NODE_W"
-						:height="NODE_H"
-						rx="8"
-						class="dag-box"
+					<defs>
+						<marker
+							id="dag-arrow"
+							viewBox="0 0 10 10"
+							refX="9"
+							refY="5"
+							markerWidth="7"
+							markerHeight="7"
+							orient="auto-start-reverse"
+						>
+							<path
+								d="M0 0L10 5L0 10z"
+								class="dag-arrowhead"
+							/>
+						</marker>
+					</defs>
+					<path
+						v-for="(e, i) in layout.edges"
+						:key="`e${i}`"
+						:d="edgePath(e)"
+						class="dag-edge"
+						:class="[`is-${e.kind}`, {'is-cyclic': e.cyclic, 'is-highlighted': isHighlighted(e)}]"
+						marker-end="url(#dag-arrow)"
 					/>
-					<rect
-						:width="5"
-						:height="NODE_H"
-						rx="2"
-						class="dag-stripe"
-						:style="colorBy === 'status' ? undefined : {fill: groupOf(n).color}"
-					/>
-					<text
-						x="14"
-						y="22"
-						class="dag-title"
-					>{{ clip(n.title, 30) }}</text>
-					<text
-						x="14"
-						y="42"
-						class="dag-meta"
-					>{{ meta(n) }}</text>
-				</g>
-			</svg>
-		</div>
+					<g
+						v-for="n in layout.nodes"
+						:key="n.id"
+						v-tooltip="tooltip(n)"
+						class="dag-node"
+						:class="[`is-${n.state}`, {'is-overdue': n.overdue, 'is-external': n.external, 'is-dimmed': hovered !== null && !related.has(n.id)}]"
+						:transform="`translate(${n.x} ${n.y})`"
+						tabindex="0"
+						role="link"
+						@click="open(n.id)"
+						@keydown.enter="open(n.id)"
+						@mouseenter="hovered = n.id"
+						@mouseleave="hovered = null"
+						@focus="hovered = n.id"
+						@blur="hovered = null"
+					>
+						<rect
+							:width="NODE_W"
+							:height="NODE_H"
+							rx="4"
+							class="dag-box"
+						/>
+						<rect
+							:width="4"
+							:height="NODE_H"
+							rx="2"
+							class="dag-stripe"
+							:style="settings.colorBy === 'status' ? undefined : {fill: groupOf(n).color}"
+						/>
+						<text
+							x="14"
+							y="22"
+							class="dag-title"
+						>{{ clip(n.title, 30) }}</text>
+						<text
+							x="14"
+							y="42"
+							class="dag-meta"
+						>{{ meta(n) }}</text>
+					</g>
+				</svg>
+			</div>
+		</Card>
 	</div>
 </template>
 
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {useRouter} from 'vue-router'
-import {useQuery} from '@tanstack/vue-query'
+import {useI18n} from 'vue-i18n'
 
-import Loading from '@/components/misc/Loading.vue'
-import {allTasksQuery} from '@/client/queries/tasks'
 import {useProjects} from '@/composables/useProjects'
-import {useAuthStore} from '@/stores/auth'
 import {buildGraph, layoutGraph, type EdgeKind, type GraphEdge, type LayoutNode, type RawTask} from './graph'
+import {useDagSettings} from './useDagSettings'
 
 const props = defineProps<{
-	/** set when embedded as a project's Graph view; hides the project picker */
-	fixedProjectId?: number
+	tasks: RawTask[]
+	loading?: boolean
+	/** set inside a project's Graph view; tasks of other projects are then shown as linked */
+	projectId?: number
 }>()
 
 const NODE_W = 240
@@ -220,78 +141,22 @@ const GAP_X = 70
 const GAP_Y = 18
 const PAD = 16
 
+const {t} = useI18n({useScope: 'global'})
 const router = useRouter()
-const auth = useAuthStore()
 const projectState = useProjects()
-
-const pickedProjectId = ref(0)
-const personId = ref(0) // 0 = everyone, -1 = unassigned
-const labelId = ref(0)
-const colorBy = ref<'status' | 'project' | 'person' | 'label'>('status')
-const projectId = computed(() => props.fixedProjectId ?? pickedProjectId.value)
-const showDone = ref(true)
-const showSubtasks = ref(false)
-const showIsolated = ref(false)
+const settings = useDagSettings()
 const hovered = ref<number | null>(null)
 
-// All tasks the user can see; filtering happens client-side so links to tasks
-// in other projects can still be drawn (as "external" nodes).
-const query = useQuery(computed(() => allTasksQuery({
-	params: {filter: '', filter_timezone: auth.settings.timezone, sort_by: ['id'], order_by: ['asc']},
-})))
-
-const projectOptions = computed(() => [...projectState.projectsArray]
-	.filter(p => p.id > 0 && !p.is_archived)
-	.sort((a, b) => a.title.localeCompare(b.title)))
-
 const layout = computed(() => {
-	const kinds: EdgeKind[] = ['blocks', 'precedes', ...(showSubtasks.value ? ['subtask' as const] : [])]
-	const g = buildGraph(rawTasks.value, {
+	const kinds: EdgeKind[] = ['blocks', 'precedes', ...(settings.value.showSubtasks ? ['subtask' as const] : [])]
+	const g = buildGraph(props.tasks, {
 		includeKinds: kinds,
-		includeIsolated: showIsolated.value,
-		includeDone: showDone.value,
-		isIncluded: t => (projectId.value === 0 || t.project_id === projectId.value)
-			&& (personId.value === 0
-				|| (personId.value === -1 ? !(t.assignees?.length) : (t.assignees ?? []).some(a => a.id === personId.value)))
-			&& (labelId.value === 0 || (t.labels ?? []).some(l => l.id === labelId.value)),
+		includeIsolated: settings.value.showUnlinked,
+		// Done and all other filtering already happened server-side via the filter popup.
+		includeDone: true,
+		isIncluded: () => true,
 	})
 	return layoutGraph(g.tasks, g.edges, {nodeWidth: NODE_W, nodeHeight: NODE_H, gapX: GAP_X, gapY: GAP_Y})
-})
-
-const rawTasks = computed(() => (query.data.value ?? []) as unknown as RawTask[])
-const people = computed(() => {
-	const m = new Map<number, string>()
-	for (const t of rawTasks.value) for (const a of t.assignees ?? []) if (a.id) m.set(a.id, a.name || a.username || '?')
-	return [...m].map(([id, name]) => ({id, name})).sort((a, b) => a.name.localeCompare(b.name))
-})
-const labelOptions = computed(() => {
-	const m = new Map<number, string>()
-	for (const t of rawTasks.value) for (const l of t.labels ?? []) if (l.id) m.set(l.id, l.title ?? '')
-	return [...m].map(([id, title]) => ({id, title})).sort((a, b) => a.title.localeCompare(b.title))
-})
-
-// Color groups: a stable palette that reads in light and dark mode; projects
-// and labels use their own color when they have one.
-const PALETTE = ['#1973ff', '#ff8a00', '#2bb673', '#8e4ec6', '#00a2c7', '#d6409f', '#a18072', '#e5484d']
-const NONE = 'var(--grey-300)'
-const hex = (c?: string) => c ? (c.startsWith('#') ? c : `#${c}`) : ''
-function groupOf(n: LayoutNode): {key: string, name: string, color: string} {
-	const pick = (id: number) => PALETTE[Math.abs(id) % PALETTE.length]
-	if (colorBy.value === 'project') {
-		const p = projectState.projects[n.projectId]
-		return {key: `p${n.projectId}`, name: p?.title ?? 'Other project', color: hex(p?.hex_color) || pick(n.projectId)}
-	}
-	if (colorBy.value === 'person') {
-		const a = n.assignees[0]
-		return a ? {key: `u${a.id}`, name: a.name, color: pick(a.id)} : {key: 'u0', name: 'Unassigned', color: NONE}
-	}
-	const l = n.labels[0]
-	return l ? {key: `l${l.id}`, name: l.title, color: hex(l.color) || pick(l.id)} : {key: 'l0', name: 'No label', color: NONE}
-}
-const legend = computed(() => {
-	const m = new Map<string, {name: string, color: string}>()
-	for (const n of layout.value.nodes) { const g = groupOf(n); if (!m.has(g.key)) m.set(g.key, g) }
-	return [...m.values()]
 })
 
 const nodeById = computed(() => new Map(layout.value.nodes.map(n => [n.id, n])))
@@ -300,30 +165,60 @@ const nodeById = computed(() => new Map(layout.value.nodes.map(n => [n.id, n])))
 const related = computed(() => {
 	const set = new Set<number>()
 	if (hovered.value === null) return set
-	const walk = (start: number, dir: 'up' | 'down') => {
-		const stack = [start]
+	for (const dir of ['up', 'down'] as const) {
+		const stack = [hovered.value]
 		while (stack.length) {
 			const v = stack.pop()!
-			if (set.has(v) && v !== start) continue
 			set.add(v)
 			for (const e of layout.value.edges) {
-				if (dir === 'down' && e.from === v && !set.has(e.to)) stack.push(e.to)
-				if (dir === 'up' && e.to === v && !set.has(e.from)) stack.push(e.from)
+				const next = dir === 'down' ? (e.from === v ? e.to : null) : (e.to === v ? e.from : null)
+				if (next !== null && !set.has(next)) stack.push(next)
 			}
 		}
 	}
-	walk(hovered.value, 'down')
-	walk(hovered.value, 'up')
 	return set
 })
 const isHighlighted = (e: GraphEdge) => hovered.value !== null && related.value.has(e.from) && related.value.has(e.to)
+
+// Color groups for the non-status modes: a fixed palette, except that projects
+// and labels use their own color when they have one.
+const PALETTE = ['#1973ff', '#ff8a00', '#2bb673', '#8e4ec6', '#00a2c7', '#d6409f', '#a18072', '#e5484d']
+const NONE = 'var(--grey-300)'
+const hex = (c?: string) => c ? (c.startsWith('#') ? c : `#${c}`) : ''
+const pick = (id: number) => PALETTE[Math.abs(id) % PALETTE.length]
+
+function groupOf(n: LayoutNode): {key: string, name: string, color: string} {
+	if (settings.value.colorBy === 'project') {
+		const p = projectState.projects[n.projectId]
+		return {key: `p${n.projectId}`, name: p?.title ?? t('walcer.dependencies.legend.otherProject'), color: hex(p?.hex_color) || pick(n.projectId)}
+	}
+	if (settings.value.colorBy === 'person') {
+		const a = n.assignees[0]
+		return a
+			? {key: `u${a.id}`, name: a.name, color: pick(a.id)}
+			: {key: 'u0', name: t('walcer.dependencies.legend.unassigned'), color: NONE}
+	}
+	const l = n.labels[0]
+	return l
+		? {key: `l${l.id}`, name: l.title, color: hex(l.color) || pick(l.id)}
+		: {key: 'l0', name: t('walcer.dependencies.legend.noLabel'), color: NONE}
+}
+
+const legend = computed(() => {
+	const m = new Map<string, {key: string, name: string, color: string}>()
+	for (const n of layout.value.nodes) {
+		const g = groupOf(n)
+		if (!m.has(g.key)) m.set(g.key, g)
+	}
+	return [...m.values()]
+})
 
 function edgePath(e: GraphEdge) {
 	const a = nodeById.value.get(e.from), b = nodeById.value.get(e.to)
 	if (!a || !b) return ''
 	const x1 = a.x + NODE_W, y1 = a.y + NODE_H / 2
 	const x2 = b.x, y2 = b.y + NODE_H / 2
-	if (x2 <= x1) { // cycle / same column: loop around below
+	if (x2 <= x1) { // a cycle: loop around underneath
 		const yb = Math.max(a.y, b.y) + NODE_H + GAP_Y
 		return `M${x1} ${y1} C${x1 + 40} ${y1} ${x1 + 40} ${yb} ${(x1 + x2) / 2} ${yb} S${x2 - 40} ${y2} ${x2 - 1} ${y2}`
 	}
@@ -334,9 +229,8 @@ function edgePath(e: GraphEdge) {
 const clip = (s: string, n: number) => s.length > n ? s.slice(0, n - 1) + '…' : s
 
 function meta(n: LayoutNode) {
-	const parts: string[] = []
-	parts.push(n.identifier || `#${n.id}`)
-	if (n.external || projectId.value === 0) { // name the project when it isn't obvious
+	const parts: string[] = [n.identifier || `#${n.id}`]
+	if (n.external || !props.projectId) {
 		const p = projectState.projects[n.projectId]
 		if (p) parts.push(clip(p.title, 14))
 	}
@@ -347,12 +241,11 @@ function meta(n: LayoutNode) {
 
 function tooltip(n: LayoutNode) {
 	const lines = [n.title]
-	if (n.state === 'waiting') lines.push(`Waiting on ${n.openBlockers} open task${n.openBlockers === 1 ? '' : 's'}`)
-	if (n.state === 'ready') lines.push('Ready to work on')
-	if (n.done) lines.push('Done')
-	if (n.overdue) lines.push('Overdue')
-	if (n.external) lines.push('In another project')
-	return lines.join('\n')
+	if (n.state === 'waiting') lines.push(t('walcer.dependencies.tooltip.waiting', {count: n.openBlockers}, n.openBlockers))
+	if (n.state === 'ready') lines.push(t('walcer.dependencies.tooltip.ready'))
+	if (n.overdue) lines.push(t('walcer.dependencies.legend.overdue'))
+	if (n.external) lines.push(t('walcer.dependencies.tooltip.external'))
+	return lines.join(' · ')
 }
 
 function open(id: number) {
@@ -361,54 +254,102 @@ function open(id: number) {
 </script>
 
 <style lang="scss" scoped>
-.dag-page { display: grid; gap: 1rem; }
-.dag-toolbar {
-	display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem;
-	font-size: .9rem;
+.dag-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: .25rem 1rem;
+	padding: .75rem 1rem;
+	border-block-end: 1px solid var(--grey-200);
+	font-size: .85rem;
+	color: var(--grey-600);
+
+	span {
+		display: inline-flex;
+		align-items: center;
+		gap: .35rem;
+	}
 }
-.dag-field { display: flex; align-items: center; gap: .5rem; }
-.dag-field select {
-	padding: .3rem .5rem; border-radius: 4px; border: 1px solid var(--grey-300);
-	background: var(--scheme-main); color: var(--text);
+
+.swatch {
+	display: inline-block;
+	inline-size: .75rem;
+	block-size: .75rem;
+	border-radius: $radius;
+
+	&.is-ready { background: var(--success); }
+	&.is-waiting { background: var(--warning); }
+	&.is-done { background: var(--grey-300); }
+	&.is-overdue { background: var(--danger); }
 }
-.dag-check { display: flex; align-items: center; gap: .35rem; cursor: pointer; }
-.dag-legend { display: flex; align-items: center; gap: .4rem; color: var(--grey-500); margin-inline-start: auto; }
-.sw {
-	display: inline-block; inline-size: .8rem; block-size: .8rem; border-radius: 3px; margin-inline-start: .5rem;
-	&.ready { background: var(--success); }
-	&.waiting { background: var(--warning); }
-	&.done { background: var(--grey-300); }
-	&.overdue { background: var(--danger); }
+
+.dag-empty {
+	padding: 2rem 1rem;
 }
-.dag-empty { color: var(--grey-500); max-inline-size: 60ch; }
-.dag-scroll {
-	overflow: auto; max-block-size: calc(100vh - 12rem);
-	background: var(--scheme-main); border-radius: 8px; box-shadow: var(--shadow-sm);
+
+.dag-canvas {
+	max-block-size: calc(100vh - 14rem);
+	overflow: auto;
+
+	svg {
+		display: block;
+	}
 }
-svg { display: block; }
 
 .dag-edge {
-	fill: none; stroke: var(--grey-400); stroke-width: 1.6;
-	transition: stroke .15s, opacity .15s;
-	&.precedes { stroke-dasharray: 6 4; }
-	&.subtask { stroke-dasharray: 2 4; stroke: var(--grey-300); }
-	&.cyclic { stroke: var(--danger); }
-	&.hl { stroke: var(--primary); stroke-width: 2.4; }
+	fill: none;
+	stroke: var(--grey-400);
+	stroke-width: 1.5;
+	transition: stroke $transition, opacity $transition;
+
+	&.is-precedes { stroke-dasharray: 6 4; }
+	&.is-subtask { stroke-dasharray: 2 4; stroke: var(--grey-300); }
+	&.is-cyclic { stroke: var(--danger); }
+	&.is-highlighted { stroke: var(--primary); stroke-width: 2.25; }
 }
-.dag-arrowhead { fill: var(--grey-500); }
+
+.dag-arrowhead {
+	fill: var(--grey-500);
+}
 
 .dag-node {
-	cursor: pointer; outline: none; transition: opacity .15s;
-	&.dim { opacity: .35; }
-	.dag-box { fill: var(--scheme-main); stroke: var(--grey-200); stroke-width: 1.2; }
-	&:hover .dag-box, &:focus-visible .dag-box { stroke: var(--primary); stroke-width: 2; }
+	cursor: pointer;
+	outline: none;
+	transition: opacity $transition;
+
+	&.is-dimmed { opacity: .35; }
+
+	.dag-box {
+		fill: var(--white);
+		stroke: var(--grey-200);
+		stroke-width: 1;
+	}
+
+	&:hover .dag-box,
+	&:focus-visible .dag-box {
+		stroke: var(--primary);
+		stroke-width: 2;
+	}
+
 	.dag-stripe { fill: var(--grey-300); }
-	&.ready .dag-stripe { fill: var(--success); }
-	&.waiting .dag-stripe { fill: var(--warning); }
-	&.overdue .dag-box { stroke: var(--danger); stroke-width: 2; }
-	&.external .dag-box { stroke-dasharray: 4 3; }
-	.dag-title { font-size: 14px; font-weight: 600; fill: var(--text); }
-	.dag-meta { font-size: 12px; fill: var(--grey-500); }
-	&.done .dag-title { fill: var(--grey-500); text-decoration: line-through; }
+	&.is-ready .dag-stripe { fill: var(--success); }
+	&.is-waiting .dag-stripe { fill: var(--warning); }
+	&.is-overdue .dag-box { stroke: var(--danger); stroke-width: 2; }
+	&.is-external .dag-box { stroke-dasharray: 4 3; }
+
+	.dag-title {
+		font-size: 14px;
+		font-weight: 600;
+		fill: var(--text);
+	}
+
+	.dag-meta {
+		font-size: 12px;
+		fill: var(--grey-500);
+	}
+
+	&.is-done .dag-title {
+		fill: var(--grey-500);
+		text-decoration: line-through;
+	}
 }
 </style>

@@ -88,7 +88,7 @@
 						<span class="menu-item-icon icon">
 							<Icon icon="sitemap" />
 						</span>
-						Dependencies
+						{{ $t('walcer.dependencies.title') }}
 					</RouterLink>
 				</li>
 				<li>
