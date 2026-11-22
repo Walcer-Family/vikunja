@@ -11,7 +11,8 @@ export interface GraphTask {
 	dueDate: Date | null
 	projectId: number
 	identifier: string
-	assignees: string[]
+	assignees: {id: number, name: string}[]
+	labels: {id: number, title: string, color: string}[]
 	/** true when the task is outside the current filter but linked to a task inside it */
 	external: boolean
 }
@@ -60,7 +61,8 @@ export interface RawTask {
 	due_date?: string | null
 	project_id: number
 	identifier?: string
-	assignees?: {username?: string, name?: string}[] | null
+	assignees?: {id?: number, username?: string, name?: string}[] | null
+	labels?: {id?: number, title?: string, hex_color?: string}[] | null
 	related_tasks?: Record<string, RawTask[] | null> | null
 }
 
@@ -78,7 +80,8 @@ function toGraphTask(t: RawTask, external: boolean): GraphTask {
 		dueDate: parseDue(t.due_date),
 		projectId: t.project_id,
 		identifier: t.identifier ?? '',
-		assignees: (t.assignees ?? []).map(a => a.name || a.username || '?'),
+		assignees: (t.assignees ?? []).map(a => ({id: a.id ?? 0, name: a.name || a.username || '?'})),
+		labels: (t.labels ?? []).map(l => ({id: l.id ?? 0, title: l.title ?? '', color: l.hex_color ?? ''})),
 		external,
 	}
 }

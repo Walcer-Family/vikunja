@@ -27,6 +27,54 @@
 					</option>
 				</select>
 			</label>
+			<label class="dag-field">
+				<span>Person</span>
+				<select
+					id="dag-person"
+					v-model.number="personId"
+				>
+					<option :value="0">Everyone</option>
+					<option :value="-1">Unassigned</option>
+					<option
+						v-for="u in people"
+						:key="u.id"
+						:value="u.id"
+					>
+						{{ u.name }}
+					</option>
+				</select>
+			</label>
+			<label
+				v-if="labelOptions.length"
+				class="dag-field"
+			>
+				<span>Label</span>
+				<select
+					id="dag-label"
+					v-model.number="labelId"
+				>
+					<option :value="0">Any label</option>
+					<option
+						v-for="l in labelOptions"
+						:key="l.id"
+						:value="l.id"
+					>
+						{{ l.title }}
+					</option>
+				</select>
+			</label>
+			<label class="dag-field">
+				<span>Color by</span>
+				<select
+					id="dag-color"
+					v-model="colorBy"
+				>
+					<option value="status">Status</option>
+					<option value="project">Project</option>
+					<option value="person">Person</option>
+					<option value="label">Label</option>
+				</select>
+			</label>
 			<label class="dag-check"><input
 				id="dag-done"
 				v-model="showDone"
@@ -43,9 +91,21 @@
 				type="checkbox"
 			> Tasks without links</label>
 			<span class="dag-legend">
-				<i class="sw ready" /> Ready
-				<i class="sw waiting" /> Waiting on others
-				<i class="sw done" /> Done
+				<template v-if="colorBy === 'status'">
+					<i class="sw ready" /> Ready
+					<i class="sw waiting" /> Waiting on others
+					<i class="sw done" /> Done
+				</template>
+				<template
+					v-for="item in legend"
+					v-else
+					:key="item.name"
+				>
+					<i
+						class="sw"
+						:style="{background: item.color}"
+					/> {{ item.name }}
+				</template>
 				<i class="sw overdue" /> Overdue
 			</span>
 		</header>
@@ -120,6 +180,7 @@
 						:height="NODE_H"
 						rx="2"
 						class="dag-stripe"
+						:style="colorBy === 'status' ? undefined : {fill: groupOf(n).color}"
 					/>
 					<text
 						x="14"
@@ -164,6 +225,9 @@ const auth = useAuthStore()
 const projectState = useProjects()
 
 const pickedProjectId = ref(0)
+const personId = ref(0) // 0 = everyone, -1 = unassigned
+const labelId = ref(0)
+const colorBy = ref<'status' | 'project' | 'person' | 'label'>('status')
 const projectId = computed(() => props.fixedProjectId ?? pickedProjectId.value)
 const showDone = ref(true)
 const showSubtasks = ref(false)
@@ -182,13 +246,52 @@ const projectOptions = computed(() => [...projectState.projectsArray]
 
 const layout = computed(() => {
 	const kinds: EdgeKind[] = ['blocks', 'precedes', ...(showSubtasks.value ? ['subtask' as const] : [])]
-	const g = buildGraph((query.data.value ?? []) as unknown as RawTask[], {
+	const g = buildGraph(rawTasks.value, {
 		includeKinds: kinds,
 		includeIsolated: showIsolated.value,
 		includeDone: showDone.value,
-		isIncluded: t => projectId.value === 0 || t.project_id === projectId.value,
+		isIncluded: t => (projectId.value === 0 || t.project_id === projectId.value)
+			&& (personId.value === 0
+				|| (personId.value === -1 ? !(t.assignees?.length) : (t.assignees ?? []).some(a => a.id === personId.value)))
+			&& (labelId.value === 0 || (t.labels ?? []).some(l => l.id === labelId.value)),
 	})
 	return layoutGraph(g.tasks, g.edges, {nodeWidth: NODE_W, nodeHeight: NODE_H, gapX: GAP_X, gapY: GAP_Y})
+})
+
+const rawTasks = computed(() => (query.data.value ?? []) as unknown as RawTask[])
+const people = computed(() => {
+	const m = new Map<number, string>()
+	for (const t of rawTasks.value) for (const a of t.assignees ?? []) if (a.id) m.set(a.id, a.name || a.username || '?')
+	return [...m].map(([id, name]) => ({id, name})).sort((a, b) => a.name.localeCompare(b.name))
+})
+const labelOptions = computed(() => {
+	const m = new Map<number, string>()
+	for (const t of rawTasks.value) for (const l of t.labels ?? []) if (l.id) m.set(l.id, l.title ?? '')
+	return [...m].map(([id, title]) => ({id, title})).sort((a, b) => a.title.localeCompare(b.title))
+})
+
+// Color groups: a stable palette that reads in light and dark mode; projects
+// and labels use their own color when they have one.
+const PALETTE = ['#1973ff', '#ff8a00', '#2bb673', '#8e4ec6', '#00a2c7', '#d6409f', '#a18072', '#e5484d']
+const NONE = 'var(--grey-300)'
+const hex = (c?: string) => c ? (c.startsWith('#') ? c : `#${c}`) : ''
+function groupOf(n: LayoutNode): {key: string, name: string, color: string} {
+	const pick = (id: number) => PALETTE[Math.abs(id) % PALETTE.length]
+	if (colorBy.value === 'project') {
+		const p = projectState.projects[n.projectId]
+		return {key: `p${n.projectId}`, name: p?.title ?? 'Other project', color: hex(p?.hex_color) || pick(n.projectId)}
+	}
+	if (colorBy.value === 'person') {
+		const a = n.assignees[0]
+		return a ? {key: `u${a.id}`, name: a.name, color: pick(a.id)} : {key: 'u0', name: 'Unassigned', color: NONE}
+	}
+	const l = n.labels[0]
+	return l ? {key: `l${l.id}`, name: l.title, color: hex(l.color) || pick(l.id)} : {key: 'l0', name: 'No label', color: NONE}
+}
+const legend = computed(() => {
+	const m = new Map<string, {name: string, color: string}>()
+	for (const n of layout.value.nodes) { const g = groupOf(n); if (!m.has(g.key)) m.set(g.key, g) }
+	return [...m.values()]
 })
 
 const nodeById = computed(() => new Map(layout.value.nodes.map(n => [n.id, n])))
@@ -237,7 +340,7 @@ function meta(n: LayoutNode) {
 		const p = projectState.projects[n.projectId]
 		if (p) parts.push(clip(p.title, 14))
 	}
-	if (n.assignees.length) parts.push(n.assignees.map(a => a.split(' ')[0]).join(', '))
+	if (n.assignees.length) parts.push(n.assignees.map(a => a.name.split(' ')[0]).join(', '))
 	if (n.dueDate) parts.push(n.dueDate.toLocaleDateString(undefined, {month: 'short', day: 'numeric'}))
 	return clip(parts.join(' · '), 40)
 }
