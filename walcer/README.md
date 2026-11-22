@@ -3,16 +3,16 @@
 ## Branches
 
     v2.8.0 (upstream tag)
-     ├─ walcer         branding only (this README, art, names, email sender)
-     ├─ walcer-viz     extra visualizations, kept independent of branding
-     └─ walcer-deploy  merge of walcer + walcer-viz  <- what tasks.walcer.family runs
+     ├─ walcer        branding only (this README, art, names, email sender)
+     ├─ walcer-viz    dependency graph: project "Graph" view + Dependencies page
+     ├─ walcer-tree   indented "Tree" project view
+     └─ family        merge of the three  <- what tasks.walcer.family runs
 
-Work on `walcer` or `walcer-viz`, never directly on `walcer-deploy`; then
-merge both into `walcer-deploy` (`git checkout walcer-deploy && git merge
-walcer walcer-viz`). CI builds `walcer` and `walcer-deploy` to
-`ghcr.io/walcer-family/vikunja:<branch>-<sha7>`. Upgrading: rebase each
-feature branch onto the new tag, then rebuild `walcer-deploy` from the new
-tag by merging both again.
+Work on a feature branch, never directly on `family`; then merge into it
+(`git checkout family && git merge walcer walcer-viz walcer-tree`). CI builds
+`walcer` and `family` to `ghcr.io/walcer-family/vikunja:<branch>-<sha7>`.
+Upgrading: rebase each feature branch onto the new tag, then rebuild `family`
+from the new tag by merging all three again.
 
 This branch (`walcer`) is upstream Vikunja plus a small, rebase-friendly reskin:
 

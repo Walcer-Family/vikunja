@@ -1,12 +1,12 @@
 # Walcer family build: pushes ghcr.io/walcer-family/vikunja:<branch> and
-# :<branch>-<sha7> for `walcer` (branding only) and `walcer-deploy` (the
-# integration branch that merges walcer + walcer-viz; this is what runs). This file only exists on
+# :<branch>-<sha7> for `walcer` (branding only) and `family` (the integration
+# branch that merges walcer + walcer-viz + walcer-tree; this is what runs). This file only exists on
 # our fork, so it never conflicts with upstream when we rebase.
 name: Walcer image
 
 on:
   push:
-    branches: [walcer, walcer-deploy]
+    branches: [walcer, family]
   workflow_dispatch:
 
 permissions:
