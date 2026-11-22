@@ -15,25 +15,38 @@
 			:has-content="false"
 		>
 			<div class="dag-legend">
-				<template v-if="settings.colorBy === 'status'">
-					<span><i class="swatch is-ready" />{{ $t('walcer.dependencies.legend.ready') }}</span>
-					<span><i class="swatch is-waiting" />{{ $t('walcer.dependencies.legend.waiting') }}</span>
-					<span><i class="swatch is-done" />{{ $t('walcer.dependencies.legend.done') }}</span>
-				</template>
-				<template v-else>
-					<span
-						v-for="item in legend"
-						:key="item.key"
-					><i
+				<BaseButton
+					v-for="item in legend"
+					:key="item.key"
+					v-tooltip="$t('walcer.dependencies.legend.toggle')"
+					class="dag-legend-item"
+					:class="{'is-off': hidden.has(item.key)}"
+					:aria-pressed="!hidden.has(item.key)"
+					@click="toggle(item.key)"
+				>
+					<i
 						class="swatch"
-						:style="{background: item.color}"
-					/>{{ item.name }}</span>
-				</template>
-				<span><i class="swatch is-overdue" />{{ $t('walcer.dependencies.legend.overdue') }}</span>
+						:class="item.swatchClass"
+						:style="item.color ? {background: item.color} : undefined"
+					/>{{ item.name }}
+				</BaseButton>
+				<BaseButton
+					v-if="hidden.size > 0"
+					class="dag-legend-reset"
+					@click="settings.hidden = []"
+				>
+					{{ $t('walcer.dependencies.legend.showAll') }}
+				</BaseButton>
 			</div>
 
 			<p
-				v-if="!loading && layout.nodes.length === 0"
+				v-if="!loading && layout.nodes.length === 0 && hidden.size > 0 && fullLayout.nodes.length > 0"
+				class="has-text-centered has-text-grey is-italic dag-empty"
+			>
+				{{ $t('walcer.dependencies.allHidden') }}
+			</p>
+			<p
+				v-else-if="!loading && layout.nodes.length === 0"
 				class="has-text-centered has-text-grey is-italic dag-empty"
 			>
 				{{ $t('walcer.dependencies.empty') }}
@@ -124,6 +137,7 @@ import {computed, ref} from 'vue'
 import {useRouter} from 'vue-router'
 import {useI18n} from 'vue-i18n'
 
+import BaseButton from '@/components/base/BaseButton.vue'
 import {useProjects} from '@/composables/useProjects'
 import {buildGraph, layoutGraph, type EdgeKind, type GraphEdge, type LayoutNode, type RawTask} from './graph'
 import {useDagSettings} from './useDagSettings'
@@ -147,16 +161,49 @@ const projectState = useProjects()
 const settings = useDagSettings()
 const hovered = ref<number | null>(null)
 
-const layout = computed(() => {
+const LAYOUT_OPTIONS = {nodeWidth: NODE_W, nodeHeight: NODE_H, gapX: GAP_X, gapY: GAP_Y}
+
+const graph = computed(() => {
 	const kinds: EdgeKind[] = ['blocks', 'precedes', ...(settings.value.showSubtasks ? ['subtask' as const] : [])]
-	const g = buildGraph(props.tasks, {
+	return buildGraph(props.tasks, {
 		includeKinds: kinds,
 		includeIsolated: settings.value.showUnlinked,
 		// Done and all other filtering already happened server-side via the filter popup.
 		includeDone: true,
 		isIncluded: () => true,
 	})
-	return layoutGraph(g.tasks, g.edges, {nodeWidth: NODE_W, nodeHeight: NODE_H, gapX: GAP_X, gapY: GAP_Y})
+})
+
+// Everything, before legend entries are clicked off. The legend and each task's
+// state (ready / waiting) come from here, so hiding a blocker doesn't make the
+// tasks it blocks look ready.
+const fullLayout = computed(() => layoutGraph(graph.value.tasks, graph.value.edges, LAYOUT_OPTIONS))
+
+const hidden = computed(() => new Set(settings.value.hidden))
+
+function toggle(key: string) {
+	const next = new Set(settings.value.hidden)
+	if (next.has(key)) next.delete(key)
+	else next.add(key)
+	settings.value.hidden = [...next]
+}
+
+const isHidden = (n: LayoutNode) =>
+	hidden.value.has(groupOf(n).key) || (n.overdue && hidden.value.has(OVERDUE))
+
+const layout = computed(() => {
+	const full = fullLayout.value
+	if (hidden.value.size === 0) return full
+	const visible = new Set(full.nodes.filter(n => !isHidden(n)).map(n => n.id))
+	const byId = new Map(full.nodes.map(n => [n.id, n]))
+	const shown = layoutGraph(graph.value.tasks.filter(t => visible.has(t.id)), graph.value.edges, LAYOUT_OPTIONS)
+	return {
+		...shown,
+		nodes: shown.nodes.map(n => {
+			const {state, overdue, openBlockers} = byId.get(n.id)!
+			return {...n, state, overdue, openBlockers}
+		}),
+	}
 })
 
 const nodeById = computed(() => new Map(layout.value.nodes.map(n => [n.id, n])))
@@ -187,7 +234,13 @@ const NONE = 'var(--grey-300)'
 const hex = (c?: string) => c ? (c.startsWith('#') ? c : `#${c}`) : ''
 const pick = (id: number) => PALETTE[Math.abs(id) % PALETTE.length]
 
-function groupOf(n: LayoutNode): {key: string, name: string, color: string} {
+const OVERDUE = 'overdue'
+type LegendItem = {key: string, name: string, color: string, swatchClass?: string}
+
+function groupOf(n: LayoutNode): LegendItem {
+	if (settings.value.colorBy === 'status') {
+		return {key: `s:${n.state}`, name: t(`walcer.dependencies.legend.${n.state}`), color: '', swatchClass: `is-${n.state}`}
+	}
 	if (settings.value.colorBy === 'project') {
 		const p = projectState.projects[n.projectId]
 		return {key: `p${n.projectId}`, name: p?.title ?? t('walcer.dependencies.legend.otherProject'), color: hex(p?.hex_color) || pick(n.projectId)}
@@ -204,13 +257,22 @@ function groupOf(n: LayoutNode): {key: string, name: string, color: string} {
 		: {key: 'l0', name: t('walcer.dependencies.legend.noLabel'), color: NONE}
 }
 
+const STATUS_ORDER = ['s:ready', 's:waiting', 's:done']
+
 const legend = computed(() => {
-	const m = new Map<string, {key: string, name: string, color: string}>()
-	for (const n of layout.value.nodes) {
+	const m = new Map<string, LegendItem>()
+	for (const n of fullLayout.value.nodes) {
 		const g = groupOf(n)
 		if (!m.has(g.key)) m.set(g.key, g)
 	}
-	return [...m.values()]
+	const items = [...m.values()]
+	if (settings.value.colorBy === 'status') {
+		items.sort((a, b) => STATUS_ORDER.indexOf(a.key) - STATUS_ORDER.indexOf(b.key))
+	}
+	if (fullLayout.value.nodes.some(n => n.overdue)) {
+		items.push({key: OVERDUE, name: t('walcer.dependencies.legend.overdue'), color: '', swatchClass: 'is-overdue'})
+	}
+	return items
 })
 
 function edgePath(e: GraphEdge) {
@@ -264,10 +326,25 @@ function open(id: number) {
 	font-size: .85rem;
 	color: var(--grey-600);
 
-	span {
+	.dag-legend-item {
 		display: inline-flex;
 		align-items: center;
 		gap: .35rem;
+		color: inherit;
+		transition: opacity $transition;
+
+		&:hover {
+			color: var(--grey-800);
+		}
+
+		&.is-off {
+			opacity: .45;
+			text-decoration: line-through;
+		}
+	}
+
+	.dag-legend-reset {
+		color: var(--primary);
 	}
 }
 

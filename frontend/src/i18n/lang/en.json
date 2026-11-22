@@ -1930,6 +1930,7 @@
       "showSubtasks": "Show subtasks",
       "showUnlinked": "Show tasks without links",
       "empty": "No linked tasks here yet. Open a task and add a relation such as \"blocking\" or \"precedes\"; it will show up here as an arrow.",
+      "allHidden": "Every task here is hidden by the legend. Click an entry to show it again.",
       "legend": {
         "ready": "Ready",
         "waiting": "Waiting on other tasks",
@@ -1937,7 +1938,9 @@
         "overdue": "Overdue",
         "unassigned": "Unassigned",
         "noLabel": "No label",
-        "otherProject": "Other project"
+        "otherProject": "Other project",
+        "toggle": "Click to hide or show these tasks",
+        "showAll": "Show all"
       },
       "tooltip": {
         "ready": "Ready to work on",

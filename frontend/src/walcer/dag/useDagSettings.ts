@@ -8,6 +8,8 @@ export interface DagSettings {
 	colorBy: DagColorBy
 	showSubtasks: boolean
 	showUnlinked: boolean
+	/** legend entries clicked off: status (s:ready…), group keys (p12, u3, l7) or 'overdue' */
+	hidden: string[]
 }
 
 export function useDagSettings() {
@@ -15,5 +17,6 @@ export function useDagSettings() {
 		colorBy: 'status',
 		showSubtasks: false,
 		showUnlinked: false,
+		hidden: [],
 	}, undefined, {mergeDefaults: true})
 }
