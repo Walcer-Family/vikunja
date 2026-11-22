@@ -229,7 +229,8 @@ function edgePath(e: GraphEdge) {
 const clip = (s: string, n: number) => s.length > n ? s.slice(0, n - 1) + '…' : s
 
 function meta(n: LayoutNode) {
-	const parts: string[] = [n.identifier || `#${n.id}`]
+	// Linked tasks from outside the list come without an identifier; their raw id would look like a task number.
+	const parts: string[] = n.identifier ? [n.identifier] : []
 	if (n.external || !props.projectId) {
 		const p = projectState.projects[n.projectId]
 		if (p) parts.push(clip(p.title, 14))

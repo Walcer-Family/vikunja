@@ -16,7 +16,8 @@ const {t} = useI18n({useScope: 'global'})
 useTitle(() => t('walcer.dependencies.title'))
 
 const auth = useAuthStore()
-const params = ref<TaskFilterParams>({...getDefaultTaskFilterParams(), filter: 'done = false'})
+// No view here, so sort by id: the API only allows sorting by position within a view.
+const params = ref<TaskFilterParams>({...getDefaultTaskFilterParams(), sort_by: ['id'], order_by: ['asc'], filter: 'done = false'})
 const query = useQuery(computed(() => allTasksQuery({
 	params: {...params.value, filter_timezone: auth.settings.timezone},
 })))
