@@ -616,12 +616,15 @@
       "arrange": "Arrange",
       "unblockedNested": {
         "title": "Unblocked tasks most indented",
-        "description": "Each task lists the tasks blocking it underneath."
+        "description": "Each task lists the tasks blocking it underneath.",
+        "addUnder": "Add a task blocking this one"
       },
       "unblockedTop": {
         "title": "Unblocked tasks at the top",
-        "description": "Each task lists the tasks it unblocks underneath."
-      }
+        "description": "Each task lists the tasks it unblocks underneath.",
+        "addUnder": "Add a task this one blocks"
+      },
+      "showDoneTasks": "Show done tasks"
     },
     "kanban": {
       "title": "Kanban",
