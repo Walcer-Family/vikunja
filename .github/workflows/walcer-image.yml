@@ -1,11 +1,12 @@
-# Walcer family build: builds the reskinned image from the `walcer` branch
-# and pushes it to ghcr.io/walcer-family/vikunja. This file only exists on
+# Walcer family build: pushes ghcr.io/walcer-family/vikunja:<branch> and
+# :<branch>-<sha7> for `walcer` (branding only) and `walcer-deploy` (the
+# integration branch that merges walcer + walcer-viz; this is what runs). This file only exists on
 # our fork, so it never conflicts with upstream when we rebase.
 name: Walcer image
 
 on:
   push:
-    branches: [walcer]
+    branches: [walcer, walcer-deploy]
   workflow_dispatch:
 
 permissions:
@@ -21,7 +22,7 @@ jobs:
           fetch-depth: 0
       - name: Version string
         id: ver
-        run: echo "describe=$(git describe --tags --always)-walcer" >> "$GITHUB_OUTPUT"
+        run: echo "describe=$(git describe --tags --always)-${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -33,8 +34,8 @@ jobs:
         with:
           images: ghcr.io/walcer-family/vikunja
           tags: |
-            type=raw,value=walcer
-            type=sha,prefix=walcer-
+            type=raw,value=${{ github.ref_name }}
+            type=sha,prefix=${{ github.ref_name }}-
       - uses: docker/build-push-action@v6
         with:
           context: .
