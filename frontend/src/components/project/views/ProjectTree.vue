@@ -42,6 +42,12 @@
 									{{ $t(`project.tree.${option}.description`) }}
 								</p>
 							</div>
+							<FancyCheckbox
+								v-model="showDoneTasks"
+								class="arrange-popup__done"
+							>
+								{{ $t('project.tree.showDoneTasks') }}
+							</FancyCheckbox>
 						</Card>
 					</template>
 				</Popup>
@@ -88,18 +94,40 @@
 						v-if="rows.length > 0"
 						class="tasks"
 					>
-						<li
+						<template
 							v-for="(row, index) in rows"
 							:key="row.key"
-							:style="{'--tree-depth': row.depth}"
-							class="tree-row"
 						>
-							<SingleTaskInProject
-								:ref="(el) => setTaskRef(el as InstanceType<typeof SingleTaskInProject> | null, index)"
-								:can-mark-as-done="canWrite"
-								:the-task="row.task"
-							/>
-						</li>
+							<li
+								:style="{'--tree-depth': row.depth}"
+								class="tree-row"
+							>
+								<SingleTaskInProject
+									:ref="(el) => setTaskRef(el as InstanceType<typeof SingleTaskInProject> | null, index)"
+									:can-mark-as-done="canWrite"
+									:the-task="row.task"
+								>
+									<BaseButton
+										v-if="canWrite"
+										v-tooltip="$t(`project.tree.${orientation}.addUnder`)"
+										class="add-under"
+										:class="{'is-active': addingUnder === row.key}"
+										:aria-label="$t(`project.tree.${orientation}.addUnder`)"
+										@click.stop="toggleAddUnder(row.key)"
+									>
+										<Icon icon="plus" />
+									</BaseButton>
+								</SingleTaskInProject>
+							</li>
+							<li
+								v-if="addingUnder === row.key"
+								:style="{'--tree-depth': row.depth + 1}"
+								class="tree-row tree-row__add-task"
+								@keydown.esc="addingUnder = null"
+							>
+								<AddTask @tasksAdded="tasks => relateNewTasks(tasks, row.task.id)" />
+							</li>
+						</template>
 					</ul>
 				</Card>
 			</div>
@@ -118,11 +146,15 @@ import Card from '@/components/misc/Card.vue'
 import Nothing from '@/components/misc/Nothing.vue'
 import Popup from '@/components/misc/Popup.vue'
 import XButton from '@/components/input/Button.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
+import FancyCheckbox from '@/components/input/FancyCheckbox.vue'
 import AddTask from '@/components/tasks/AddTask.vue'
 import SingleTaskInProject from '@/components/tasks/partials/SingleTaskInProject.vue'
 import FilterPopup from '@/components/project/partials/FilterPopup.vue'
 import SortPopup from '@/components/project/partials/SortPopup.vue'
 
+import type {Task as ITask} from '@/client/generated'
+import {useCreateTaskRelationMutation} from '@/client/queries/taskMutations'
 import {allTasksQuery, getDefaultTaskFilterParams, type TaskFilterParams} from '@/client/queries/tasks'
 import {isSavedFilterProject} from '@/client/queries/projects'
 import {isRequestContextAbort} from '@/client/requestContext'
@@ -134,6 +166,7 @@ import {eventToShortcutString} from '@/helpers/shortcut'
 import {error} from '@/message'
 import {useAuthStore} from '@/stores/auth'
 import {useBaseStore} from '@/stores/base'
+import {RELATION_KIND} from '@/types/IRelationKind'
 
 import {buildTaskTree, TREE_ORIENTATIONS, type TreeOrientation} from './projectTree'
 
@@ -146,6 +179,8 @@ const props = defineProps<{
 defineOptions({name: 'ProjectTree'})
 
 const orientation = useStorage<TreeOrientation>('treeViewOrientation', 'unblockedNested')
+// Like the default List view, done tasks stay out of the way unless asked for.
+const showDoneTasks = useStorage('treeViewShowDoneTasks', false)
 
 const params = ref<TaskFilterParams>({...getDefaultTaskFilterParams()})
 const sortBy = ref<SortBy>({position: 'asc'})
@@ -179,7 +214,12 @@ watch(query.error, cause => {
 const loading = query.isFetching
 const showLoading = useDelayedLoading(loading)
 
-const rows = computed(() => buildTaskTree(query.data.value ?? [], orientation.value))
+const visibleTasks = computed(() => {
+	const tasks = query.data.value ?? []
+	return showDoneTasks.value ? tasks : tasks.filter(task => !task.done)
+})
+
+const rows = computed(() => buildTaskTree(visibleTasks.value, orientation.value))
 
 const baseStore = useBaseStore()
 const {currentProject: project} = useCurrentProject()
@@ -207,6 +247,27 @@ function focusNewTaskInput() {
 
 function updateTaskList() {
 	baseStore.setHasTasks(true)
+}
+
+// The row a new task is being added under, by row key: a task can have several rows.
+const addingUnder = ref<string | null>(null)
+watch([() => props.projectId, () => props.viewId, orientation], () => { addingUnder.value = null })
+
+function toggleAddUnder(rowKey: string) {
+	addingUnder.value = addingUnder.value === rowKey ? null : rowKey
+}
+
+const createRelation = useCreateTaskRelationMutation()
+
+// A task added under a row becomes its child in the current arrangement: a blocker of the row
+// when blockers are nested, or a task the row blocks when unblocked tasks are at the top.
+async function relateNewTasks(created: ITask[], rowTaskId: number) {
+	updateTaskList()
+	addingUnder.value = null
+	await Promise.all(created.map(task => createRelation.mutateAsync(orientation.value === 'unblockedNested'
+		? {taskId: task.id!, other_task_id: rowTaskId, relation_kind: RELATION_KIND.BLOCKING}
+		: {taskId: rowTaskId, other_task_id: task.id!, relation_kind: RELATION_KIND.BLOCKING},
+	))).catch(() => { /* Mutation reports the error. */ })
 }
 
 const taskRefs = ref<(InstanceType<typeof SingleTaskInProject> | null)[]>([])
@@ -313,6 +374,40 @@ onBeforeUnmount(() => {
 // Same step as the List view's nested subtasks.
 .tree-row {
 	margin-inline-start: calc(var(--tree-depth) * 1.75rem);
+}
+
+.tree-row__add-task {
+	padding: .25rem .4rem;
+}
+
+// Revealed on hover like the row's favorite star.
+:deep(.single-task .add-under) {
+	inline-size: 27px;
+	text-align: center;
+	border-radius: $radius;
+	color: var(--grey-400);
+	transition: opacity $transition, color $transition;
+
+	&:hover,
+	&.is-active {
+		color: var(--primary);
+	}
+}
+
+@media (hover: hover) and (pointer: fine) {
+	:deep(.single-task) {
+		.add-under:not(.is-active, :focus) {
+			opacity: 0;
+		}
+
+		&:hover .add-under {
+			opacity: 1;
+		}
+	}
+}
+
+.arrange-popup__done {
+	margin-block-start: .75rem;
 }
 
 .tree-view__add-task {
