@@ -468,6 +468,12 @@ const router = createRouter({
 				title: 'timeTracking.title',
 			},
 		},
+		// Walcer: task dependency graph (frontend/src/walcer/dag)
+		{
+			path: '/dependencies',
+			name: 'walcer.dependencies',
+			component: () => import('@/walcer/dag/DependenciesPage.vue'),
+		},
 		{
 			path: '/trash',
 			component: () => import('@/views/trash/TrashView.vue'),

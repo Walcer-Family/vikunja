@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ProjectWrapper from '@/components/project/ProjectWrapper.vue'
+import DependencyGraph from '@/walcer/dag/DependencyGraph.vue'
 
 defineProps<{
 	isLoadingProject: boolean,
@@ -15,6 +16,7 @@ defineProps<{
 		:project-id="projectId"
 		:view-id
 	>
-		<!-- Walcer: dependency graph (DAG) of blocking relations. Built on walcer-viz. -->
+		<!-- Walcer: dependency graph (DAG); implementation in frontend/src/walcer/dag -->
+		<DependencyGraph :fixed-project-id="projectId" />
 	</ProjectWrapper>
 </template>
