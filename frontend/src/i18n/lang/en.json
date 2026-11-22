@@ -612,7 +612,16 @@
       "title": "Graph"
     },
     "tree": {
-      "title": "Tree"
+      "title": "Tree",
+      "arrange": "Arrange",
+      "unblockedNested": {
+        "title": "Unblocked tasks most indented",
+        "description": "Each task lists the tasks blocking it underneath."
+      },
+      "unblockedTop": {
+        "title": "Unblocked tasks at the top",
+        "description": "Each task lists the tasks it unblocks underneath."
+      }
     },
     "kanban": {
       "title": "Kanban",
